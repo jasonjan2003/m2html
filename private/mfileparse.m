@@ -25,7 +25,7 @@ end
 strtok_delim = sprintf(' \t\n\r(){}[]<>+-*~!|\\@&/,:;="''%%');
 
 %- Open for reading the M-file
-fid = openfile(mfile,'r');
+fid = fopen(mfile,'r');
 it = 0; % line number
 
 %- Initialize Output
