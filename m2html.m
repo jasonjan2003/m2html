@@ -1,4 +1,4 @@
-function m2html(varargin)
+function m2html(opts)
 %M2HTML - Documentation Generator for Matlab M-files and Toolboxes in HTML
 %  M2HTML by itself generates an HTML documentation of the Matlab M-files found
 %  in the direct subdirectories of the current directory. HTML files are 
@@ -101,249 +101,83 @@ function m2html(varargin)
 %--------------------------------------------------------------------------
 %- Set up options and default parameters
 %--------------------------------------------------------------------------
-t0 = clock; % for statistics
-msgInvalidPair = 'Bad value for argument: ''%s''';
-
-options = struct('verbose', 1,...
-                 'mFiles', {{'.'}},...
-                 'htmlDir', 'doc',...
-                 'recursive', 0,...
-                 'source', 1,...
-                 'download',0,...
-                 'syntaxHighlighting', 1,...
-                 'tabs', 4,...
-                 'globalHypertextLinks', 0,...
-                 'graph', 0,...
-                 'todo', 0,...
-                 'load', 0,...
-                 'save', 0,...
-                 'search', 0,...
-                 'helptocxml', 0,...
-                 'indexFile', 'index',...
-                 'extension', '.html',...
-                 'template', 'blue',...
-                 'rootdir', pwd,...
-                 'ignoredDir', {{'.svn','.git','.github','.hg'}}, ...
-                 'language', 'english');
-
-if nargin == 1 && isstruct(varargin{1})
-    paramlist = [ fieldnames(varargin{1}) ...
-                  struct2cell(varargin{1}) ]';
-    paramlist = { paramlist{:} };
-else
-    if mod(nargin,2)
-        error('Invalid parameter/value pair arguments.');
-    end
-    paramlist = varargin;
+arguments
+    opts.verbose            (1,1)      logical                      = true
+    opts.mFiles                                   {isstring}        = {"."}               % NOTE: Currently must be a cellstr
+    opts.htmlDir                                                    = 'doc'
+    opts.recursive          (1,1)      logical                      = false               % NOTE: Sets load=0
+    opts.source             (1,1)      logical                      = true
+    opts.download           (1,1)      logical                      = false
+    opts.syntaxHighlighting (1,1)      logical                      = true
+    opts.tabs               (1,1)      uint8      {mustBePositive}  = 4
+    opts.globalHypertextLinks (1,1)    logical                      = false
+    opts.graph              (1,1)      logical                      = false
+    opts.todo               (1,1)      logical                      = false
+    opts.load                                     {isStringScalar}  = ""
+    opts.save               (1,1)      logical                      = false
+    opts.search             (1,1)      logical                      = false
+    opts.helptocxml         (1,1)      logical                      = false
+    opts.indexFile                                                  = 'index'
+    opts.extension                                                  = '.html'              % TODO: Check isExtension
+    opts.template                                                   = 'blue'
+    opts.rootdir                                  {isfolder}        = pwd
+    opts.ignoredDir                                                 = ...                  % NOTE: Currently must be a cellstr
+                                                                      {'asv','.svn','.git','.github','.hg'}   
+    opts.language                                                   = 'english'
 end
 
-optionsnames = lower(fieldnames(options));
-for i=1:2:length(paramlist)
-    pname = paramlist{i};
-    pvalue = paramlist{i+1};
-    ind = strmatch(lower(pname),optionsnames);
-    if isempty(ind)
-        error(['Invalid parameter: ''' pname '''.']);
-    elseif length(ind) > 1
-        error(['Ambiguous parameter: ''' pname '''.']);
+t0 = tic; % for statistics
+
+%--------------------------------------------------------------------------
+%- Try to load saved session file
+%--------------------------------------------------------------------------
+if isfolder(opts.load)
+    matFilePathName = fullfile(opts.load,'m2html.mat');
+    try
+        load(matFilePathName);
+    catch
+        error('Unable to load %s.', matFilePathName);
     end
-    switch(optionsnames{ind})
-        case 'verbose'
-            if strcmpi(pvalue,'on')
-                options.verbose = 1;
-            elseif strcmpi(pvalue,'off')
-                options.verbose = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'mfiles'
-            if iscellstr(pvalue)
-                options.mFiles = pvalue;
-            elseif ischar(pvalue)
-                options.mFiles = cellstr(pvalue);
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-            options.load = 0;
-        case 'htmldir'
-            if ischar(pvalue)
-                if isempty(pvalue)
-                    options.htmlDir = '.';
-                else
-                    options.htmlDir = pvalue;
-                end
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'recursive'
-            if strcmpi(pvalue,'on')
-                options.recursive = 1;
-            elseif strcmpi(pvalue,'off')
-                options.recursive = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-            options.load = 0;
-        case 'source'
-            if strcmpi(pvalue,'on')
-                options.source = 1;
-            elseif strcmpi(pvalue,'off')
-                options.source = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'download'
-            if strcmpi(pvalue,'on')
-                options.download = 1;
-            elseif strcmpi(pvalue,'off')
-                options.download = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'syntaxhighlighting'
-            if strcmpi(pvalue,'on')
-                options.syntaxHighlighting = 1;
-            elseif strcmpi(pvalue,'off')
-                options.syntaxHighlighting = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'tabs'
-            if pvalue >= 0
-                options.tabs = pvalue;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'globalhypertextlinks'
-            if strcmpi(pvalue,'on')
-                options.globalHypertextLinks = 1;
-            elseif strcmpi(pvalue,'off')
-                options.globalHypertextLinks = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-            options.load = 0;
-        case 'graph'
-            if strcmpi(pvalue,'on')
-                options.graph = 1;
-            elseif strcmpi(pvalue,'off')
-                options.graph = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'todo'
-            if strcmpi(pvalue,'on')
-                options.todo = 1;
-            elseif strcmpi(pvalue,'off')
-                options.todo = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'load'
-            if ischar(pvalue)
-                if exist(pvalue) == 7 % directory provided
-                    pvalue = fullfile(pvalue,'m2html.mat');
-                end         
-                try
-                    load(pvalue);
-                catch
-                    error(sprintf('Unable to load %s.', pvalue));
-                end
-                options.load = 1;
-                [dummy options.template] = fileparts(options.template);
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'save'
-            if strcmpi(pvalue,'on')
-                options.save = 1;
-            elseif strcmpi(pvalue,'off')
-                options.save = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'search'
-            if strcmpi(pvalue,'on')
-                options.search = 1;
-            elseif strcmpi(pvalue,'off')
-                options.search = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'helptocxml'
-            if strcmpi(pvalue,'on')
-                options.helptocxml = 1;
-            elseif strcmpi(pvalue,'off')
-                options.helptocxml = 0;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'indexfile'
-            if ischar(pvalue)
-                options.indexFile = pvalue;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'extension'
-            if ischar(pvalue) && pvalue(1) == '.'
-                options.extension = pvalue;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'template'
-            if ischar(pvalue)
-                options.template = pvalue;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'ignoreddir'
-            if iscellstr(pvalue)
-                options.ignoredDir = pvalue;
-            elseif ischar(pvalue)
-                options.ignoredDir = cellstr(pvalue);
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        case 'language'
-            if ischar(pvalue)
-                options.language = pvalue;
-            else
-                error(sprintf(msgInvalidPair,pname));
-            end
-        otherwise
-            error(['Invalid parameter: ''' pname '''.']);
-    end
+    
+    % Set loadFromFile flag to true
+    loadFromFile = true;
+
+elseif strlength(opts.load) > 0
+    error('Unable to load from directory %s.', opts.load);
+else
+    % Set loadFromFile to false
+    loadFromFile = false;
 end
 
 %--------------------------------------------------------------------------
 %- Get template files location
 %--------------------------------------------------------------------------
-s = fileparts(which(mfilename));
-options.template = fullfile(s,'templates',options.template);
-if exist(options.template) ~= 7
+s = fileparts(mfilename('fullpath'));
+opts.template = fullfile(s,'templates',opts.template);
+if ~isfolder(opts.template)
     error('[Template] Unknown template.');
 end
 
 %--------------------------------------------------------------------------
 %- Get list of M-files
 %--------------------------------------------------------------------------
-if ~options.load
-    if strcmp(options.mFiles,'.')
+if ~loadFromFile
+    if strcmp(opts.mFiles,'.')
         d = dir(pwd); d = {d([d.isdir]).name};
-        options.mFiles = {d{~ismember(d,{'.' '..' options.ignoredDir{:}})}};
+        opts.mFiles = {d{~ismember(d,{'.' '..' opts.ignoredDir{:}})}};
     end
-    mfiles = getmfiles(options.mFiles,{},options.recursive,options.ignoredDir);
+    mfiles = getmfiles(opts.mFiles,{},opts.recursive,opts.ignoredDir);
     if ~length(mfiles), fprintf('Nothing to be done.\n'); return; end
-    if options.verbose
-        fprintf('Found %d M-files.\n',length(mfiles));
-    end
+    
+    fprintf('Found %d M-files.\n',length(mfiles));
+    
     mfiles = sort(mfiles); % sort list of M-files in dictionary order
 end
 
 %--------------------------------------------------------------------------
 %- Get list of (unique) directories and (unique) names
 %--------------------------------------------------------------------------
-if ~options.load
+if ~loadFromFile
     mdirs = {};
     names = {};
     for i=1:length(mfiles)
@@ -352,9 +186,8 @@ if ~options.load
     end
 
     mdir = unique(mdirs);
-    if options.verbose
-        fprintf('Found %d unique Matlab directories.\n',length(mdir));
-    end
+    
+    fprintf('Found %d unique Matlab directories.\n',length(mdir));
 
     name = names;
     %name = unique(names); % output is sorted
@@ -366,19 +199,18 @@ end
 %--------------------------------------------------------------------------
 %- Create output directory, if necessary
 %--------------------------------------------------------------------------
-if isempty(dir(options.htmlDir))										       
-    %- Create the top level output directory							       
-    if options.verbose  												       
-        fprintf('Creating directory %s...\n',options.htmlDir);  		       
+if isempty(dir(opts.htmlDir))										       
+    %- Create the top level output directory							       											       
+    fprintf('Creating directory %s...\n',opts.htmlDir);  		       
+															       
+    if opts.htmlDir(end) == filesep								       
+        opts.htmlDir(end) = [];  									       
     end 																       
-    if options.htmlDir(end) == filesep								       
-        options.htmlDir(end) = [];  									       
-    end 																       
-    [pathdir, namedir] = fileparts(options.htmlDir);					       
+    [pathdir, namedir] = fileparts(opts.htmlDir);					       
     if isempty(pathdir) 												       
-        [status, msg] = mkdir(escapeblank(namedir)); 								       
+        [status, msg] = mkdir(strtrim(namedir)); 								       
     else																       
-        [status, msg] = mkdir(escapeblank(pathdir), escapeblank(namedir));						       
+        [status, msg] = mkdir(strtrim(pathdir), strtrim(namedir));						       
     end 																       
     if ~status, error(msg); end 														       
 end 																	       
@@ -386,9 +218,9 @@ end
 %--------------------------------------------------------------------------
 %- Get synopsis, H1 line, script/function, subroutines, cross-references, todo
 %--------------------------------------------------------------------------
-if ~options.load
-    synopsis   = cell(size(mfiles));
-    h1line     = cell(size(mfiles));
+if ~loadFromFile
+    synopsis   = cell(size(mfiles));                                        % File declaration line
+    h1line     = cell(size(mfiles));                                        % First line of comment
     subroutine = cell(size(mfiles));
     hrefs      = sparse(length(mfiles), length(mfiles));
     todo       = struct('mfile',[], 'line',[], 'comment',{{}});
@@ -399,10 +231,10 @@ if ~options.load
     freq       = cell(size(mfiles));
 
     for i=1:length(mfiles)
-        if options.verbose
-            fprintf('Processing file %s...',mfiles{i});
-        end
-        s = mfileparse(mfiles{i}, mdirs, names, options);
+        
+        fprintf('Processing file %s...',mfiles{i});
+        
+        s = mfileparse(mfiles{i}, mdirs, names, opts);
         synopsis{i}   = s.synopsis;
         h1line{i}     = s.h1line;
         subroutine{i} = s.subroutine;
@@ -411,29 +243,28 @@ if ~options.load
         todo.line     = [todo.line s.todo.line];
         todo.comment  = {todo.comment{:} s.todo.comment{:}};
         ismex(i,:)    = s.ismex;
-        if options.search
-            if options.verbose, fprintf('search...'); end
+        if opts.search
+            fprintf('search...');
             [kw{i}, freq{i}] = searchindex(mfiles{i});
             statlist = union(statlist, kw{i});
         end
-        if options.verbose, fprintf('\n'); end
+        if opts.verbose, fprintf('\n'); end
     end
     hrefs = hrefs > 0;
-    if options.search
-        if options.verbose
-            fprintf('Creating the search index...');
-        end
+    if opts.search
+        fprintf('Creating the search index...');
+        
         statinfo = sparse(length(statlist),length(mfiles));
         for i=1:length(mfiles)
             i1 = find(ismember(statlist, kw{i}));
-            i2 = repmat(i,1,length(i1));
+            i2 = repmat(i,length(i1),1);
             if ~isempty(i1)
                 statinfo(sub2ind(size(statinfo),i1,i2)) = freq{i};
             end
-            if options.verbose, fprintf('.'); end
+            fprintf('.');
         end
-        clear kw freq;
-        if options.verbose, fprintf('\n'); end
+        clearvars kw freq;
+        fprintf('\n');
     end
 end
 
@@ -442,12 +273,11 @@ end
 %--------------------------------------------------------------------------
 matfilesave = 'm2html.mat';
 
-if options.save
-    if options.verbose
-        fprintf('Saving MAT file %s...\n',matfilesave);
-    end
-    save(fullfile(options.htmlDir,matfilesave), ...
-        'mfiles', 'names', 'mdirs', 'name', 'mdir', 'options', ...
+if opts.save
+    fprintf('Saving MAT file %s...\n',matfilesave);
+
+    save(fullfile(opts.htmlDir,matfilesave), ...
+        'mfiles', 'names', 'mdirs', 'name', 'mdir', 'opts', ...
         'hrefs', 'synopsis', 'h1line', 'subroutine', 'todo', 'ismex', ...
         'statlist', 'statinfo');
 end
@@ -456,21 +286,20 @@ end
 %- Setup the output directories
 %--------------------------------------------------------------------------
 for i=1:length(mdir)
-    if exist(fullfile(options.htmlDir,mdir{i})) ~= 7
+    if exist(fullfile(opts.htmlDir,mdir{i})) ~= 7
         ldir = splitpath(mdir{i});
         for j=1:length(ldir)
-            if exist(fullfile(options.htmlDir,ldir{1:j})) ~= 7
+            if exist(fullfile(opts.htmlDir,ldir{1:j})) ~= 7
                 %- Create the output directory
-                if options.verbose
-                    fprintf('Creating directory %s...\n',...
-                            fullfile(options.htmlDir,ldir{1:j}));
-                end
+                fprintf('Creating directory %s...\n',...
+                            fullfile(opts.htmlDir,ldir{1:j}));
+
                 if j == 1
-                    [status, msg] = mkdir(escapeblank(options.htmlDir), ...
-                        escapeblank(ldir{1}));
+                    [status, msg] = mkdir(strtrim(opts.htmlDir), ...
+                        strtrim(ldir{1}));
                 else
-                    [status, msg] = mkdir(escapeblank(options.htmlDir), ...
-                        escapeblank(fullfile(ldir{1:j})));
+                    [status, msg] = mkdir(strtrim(opts.htmlDir), ...
+                        strtrim(fullfile(ldir{1:j})));
                 end
                 error(msg);
             end
@@ -487,7 +316,7 @@ php_search = 'search.php';
 dotbase = 'graph';
 
 %- Create the HTML template
-tpl = template(options.template,'remove');
+tpl = template(opts.template,'remove');
 tpl = set(tpl,'file','TPL_MASTER',tpl_master);
 tpl = set(tpl,'block','TPL_MASTER','rowdir','rowdirs');
 tpl = set(tpl,'block','TPL_MASTER','idrow','idrows');
@@ -496,10 +325,9 @@ tpl = set(tpl,'block','TPL_MASTER','search','searchs');
 tpl = set(tpl,'block','TPL_MASTER','graph','graphs');
 
 %- Open for writing the HTML master index file
-curfile = fullfile(options.htmlDir,[options.indexFile options.extension]);
-if options.verbose
-    fprintf('Creating HTML file %s...\n',curfile);
-end
+curfile = fullfile(opts.htmlDir,[opts.indexFile opts.extension]);
+fprintf('Creating HTML file %s...\n',curfile);
+
 fid = openfile(curfile,'w');
 
 %- Set some template variables
@@ -511,7 +339,7 @@ tpl = set(tpl,'var','DIRS', sprintf('%s ',mdir{:}));
 %- Print list of unique directories
 for i=1:length(mdir)
     tpl = set(tpl,'var','L_DIR',...
-              fullurl(mdir{i},[options.indexFile options.extension]));
+              fullurl(mdir{i},[opts.indexFile opts.extension]));
     tpl = set(tpl,'var','DIR',mdir{i});
     tpl = parse(tpl,'rowdirs','rowdir',1);
 end
@@ -526,7 +354,7 @@ ind = reshape(ind,m_floor,tpl_master_identifier_nbyline)';
 for i=1:prod(size(ind))
     if ind(i)
         tpl = set(tpl,'var','L_IDNAME',...
-            fullurl(mdirs{ind(i)},[names{ind(i)} options.extension]));
+            fullurl(mdirs{ind(i)},[names{ind(i)} opts.extension]));
         tpl = set(tpl,'var','T_IDNAME',mdirs{ind(i)});
         tpl = set(tpl,'var','IDNAME',names{ind(i)});
         tpl = parse(tpl,'idcolumns','idcolumn',1);
@@ -544,15 +372,15 @@ end
 
 %- Add a search form if necessary
 tpl = set(tpl,'var','searchs','');
-if options.search
+if opts.search
     tpl = set(tpl,'var','PHPFILE',php_search);
     tpl = parse(tpl,'searchs','search',1);
 end
 
 %- Link to a full dependency graph, if necessary
 tpl = set(tpl,'var','graphs','');
-if options.graph && options.globalHypertextLinks && length(mdir) > 1
-    tpl = set(tpl,'var','LGRAPH',[dotbase options.extension]);
+if opts.graph && opts.globalHypertextLinks && length(mdir) > 1
+    tpl = set(tpl,'var','LGRAPH',[dotbase opts.extension]);
     tpl = parse(tpl,'graphs','graph',1);
 end
 
@@ -565,22 +393,22 @@ fclose(fid);
 %- Copy template files (CSS, images, ...)
 %--------------------------------------------------------------------------
 % Get list of files
-d = dir(options.template);
+d = dir(opts.template);
 d = {d(~[d.isdir]).name};
 % Copy files
 for i=1:length(d)
     [p, n, ext] = fileparts(d{i});
     if ~strcmp(ext,'.tpl') ... % do not copy .tpl files
        && ~strcmp([n ext],'Thumbs.db') % do not copy this Windows generated file
-        if isempty(dir(fullfile(options.htmlDir,d{i})))
-            if options.verbose
+        if isempty(dir(fullfile(opts.htmlDir,d{i})))
+            if opts.verbose
                 fprintf('Copying template file %s...\n',d{i});
             end
             %- there is a bug with <copyfile> in Matlab 6.5 :
             %   http://www.mathworks.com/support/solutions/data/1-1B5JY.html
             %- and <copyfile> does not overwrite files even if newer...
-            [status, errmsg] = copyfile(fullfile(options.template,d{i}),...
-                                        options.htmlDir);
+            [status, errmsg] = copyfile(fullfile(opts.template,d{i}),...
+                                        opts.htmlDir);
             %- If you encounter this bug, please uncomment one of the following lines
             % eval(['!cp -rf ' fullfile(options.template,d{i}) ' ' options.htmlDir]);
             % eval(['!copy ' fullfile(options.template,d{i}) ' ' options.htmlDir]);
@@ -607,31 +435,29 @@ idx_search = 'search.idx';
 % TODO % improving the fill in of 'statlist' and 'statinfo'
 % TODO % improving the search template file and update the CSS file
 
-if options.search
+if opts.search
     %- Write the search index file in output directory
-    if options.verbose
-        fprintf('Creating Search Index file %s...\n', idx_search);
-    end
+    fprintf('Creating Search Index file %s...\n', idx_search);
+
     docinfo = cell(length(mfiles),2);
     for i=1:length(mfiles)
         docinfo{i,1} = h1line{i};
-        docinfo{i,2} = fullurl(mdirs{i}, [names{i} options.extension]);
+        docinfo{i,2} = fullurl(mdirs{i}, [names{i} opts.extension]);
     end
-    doxywrite(fullfile(options.htmlDir,idx_search),statlist,statinfo,docinfo);
+    doxywrite(fullfile(opts.htmlDir,idx_search),statlist,statinfo,docinfo);
     
     %- Create the PHP template
-    tpl = template(options.template,'remove');
+    tpl = template(opts.template,'remove');
     tpl = set(tpl,'file','TPL_SEARCH',tpl_search);
     
     %- Open for writing the PHP search script
-    curfile = fullfile(options.htmlDir, php_search); 
-    if options.verbose
-        fprintf('Creating PHP script %s...\n',curfile);
-    end
-    fid = openfile(curfile,'w');
+    curfile = fullfile(opts.htmlDir, php_search); 
+    fprintf('Creating PHP script %s...\n',curfile);
+
+    fid = fopen(curfile,'w');
     
     %- Set template fields
-    tpl = set(tpl,'var','INDEX',[options.indexFile options.extension]);
+    tpl = set(tpl,'var','INDEX',[opts.indexFile opts.extension]);
     tpl = set(tpl,'var','MASTERPATH','./');
     tpl = set(tpl,'var','DATE',[datestr(now,8) ' ' datestr(now,1) ' ' ...
                                 datestr(now,13)]);
@@ -651,41 +477,40 @@ end
 % and http://www.mathworks.com/support/solutions/data/1-18U6Q.html?solution=1-18U6Q
 
 % TODO % display directories in TOC hierarchically instead of linearly
-if options.helptocxml
-    curfile = fullfile(options.htmlDir, 'helptoc.xml');
-    if options.verbose
-        fprintf('Creating XML Table-Of-Content %s...\n',curfile);
-    end
-    fid = openfile(curfile,'w');
+if opts.helptocxml
+    curfile = fullfile(opts.htmlDir, 'helptoc.xml');
+    fprintf('Creating XML Table-Of-Content %s...\n',curfile);
+
+    fid = fopen(curfile,'w');
     fprintf(fid,'<?xml version=''1.0'' encoding=''ISO-8859-1'' ?>\n');
     fprintf(fid,'<!-- $Date: %s $ -->\n\n', datestr(now,31));
     fprintf(fid,'<toc version="1.0">\n\n');
     fprintf(fid,['<tocitem target="%s" ',...
         'image="$toolbox/matlab/icons/book_mat.gif">%s\n'], ...
-        [options.indexFile options.extension],'Toolbox');
+        [opts.indexFile opts.extension],'Toolbox');
     for i=1:length(mdir)
         fprintf(fid,['<tocitem target="%s" ',...
             'image="$toolbox/matlab/icons/reficon.gif">%s\n'], ...
             fullfile(mdir{i}, ...
-                [options.indexFile options.extension]),mdir{i});
-        if options.graph
+                [opts.indexFile opts.extension]),mdir{i});
+        if opts.graph
             fprintf(fid,['\t<tocitem target="%s" ',...
             'image="$toolbox/matlab/icons/simulinkicon.gif">%s</tocitem>\n'], ...
                 fullfile(mdir{i},...
-                [dotbase options.extension]),'Dependency Graph');
+                [dotbase opts.extension]),'Dependency Graph');
         end
-        if options.todo
+        if opts.todo
             if ~isempty(intersect(find(strcmp(mdir{i},mdirs)),todo.mfile))
                 fprintf(fid,['\t<tocitem target="%s" ',...
                 'image="$toolbox/matlab/icons/demoicon.gif">%s</tocitem>\n'], ...
                     fullfile(mdir{i},...
-                    ['todo' options.extension]),'Todo list');
+                    ['todo' opts.extension]),'Todo list');
             end
         end
         for j=1:length(mdirs)
             if strcmp(mdirs{j},mdir{i})
                 curfile = fullfile(mdir{i},...
-                    [names{j} options.extension]);
+                    [names{j} opts.extension]);
                 fprintf(fid,'\t<tocitem target="%s">%s</tocitem>\n', ...
                     curfile,names{j});
             end
@@ -705,7 +530,7 @@ tpl_mdir_link = '<a href="%s">%s</a>';
 %dotbase defined earlier
 
 %- Create the HTML template
-tpl = template(options.template,'remove');
+tpl = template(opts.template,'remove');
 tpl = set(tpl,'file','TPL_MDIR',tpl_mdir);
 tpl = set(tpl,'block','TPL_MDIR','row-m','rows-m');
 tpl = set(tpl,'block','row-m','mexfile','mex');
@@ -720,15 +545,14 @@ tpl = set(tpl,'var','DATE',[datestr(now,8) ' ' datestr(now,1) ' ' ...
 
 for i=1:length(mdir)
     %- Open for writing each output directory index file
-    curfile = fullfile(options.htmlDir,mdir{i},...
-                       [options.indexFile options.extension]);
-    if options.verbose
-        fprintf('Creating HTML file %s...\n',curfile);
-    end
-    fid = openfile(curfile,'w');
+    curfile = fullfile(opts.htmlDir,mdir{i},...
+                       [opts.indexFile opts.extension]);
+    fprintf('Creating HTML file %s...\n',curfile);
+
+    fid = fopen(curfile,'w');
 
     %- Set template fields
-    tpl = set(tpl,'var','INDEX',     [options.indexFile options.extension]);
+    tpl = set(tpl,'var','INDEX',     [opts.indexFile opts.extension]);
     tpl = set(tpl,'var','MASTERPATH',backtomaster(mdir{i}));
     tpl = set(tpl,'var','MDIR',      mdir{i});
     
@@ -736,7 +560,7 @@ for i=1:length(mdir)
     tpl = set(tpl,'var','rows-m','');
     for j=1:length(mdirs)
         if strcmp(mdirs{j},mdir{i})
-            tpl = set(tpl,'var','L_NAME', [names{j} options.extension]);
+            tpl = set(tpl,'var','L_NAME', [names{j} opts.extension]);
             tpl = set(tpl,'var','NAME',   names{j});
             tpl = set(tpl,'var','H1LINE', h1line{j});
             if any(ismex(j,:))
@@ -772,12 +596,12 @@ for i=1:length(mdir)
     tpl = set(tpl,'var','subfold','');
     d = dir(mdir{i});
     d = {d([d.isdir]).name};
-    d = {d{~ismember(d,{'.' '..' options.ignoredDir{:}})}};
+    d = {d{~ismember(d,{'.' '..' opts.ignoredDir{:}})}};
     for j=1:length(d)
         if ismember(fullfile(mdir{i},d{j}),mdir)
             tpl = set(tpl,'var','SUBDIRECTORY',...
                 sprintf(tpl_mdir_link,...
-                fullurl(d{j},[options.indexFile options.extension]),d{j}));
+                fullurl(d{j},[opts.indexFile opts.extension]),d{j}));
         else
             tpl = set(tpl,'var','SUBDIRECTORY',d{j});
         end
@@ -789,17 +613,17 @@ for i=1:length(mdir)
     
     %- Link to the TODO list if necessary
     tpl = set(tpl,'var','todolists','');
-    if options.todo
+    if opts.todo
         if ~isempty(intersect(find(strcmp(mdir{i},mdirs)),todo.mfile))
-            tpl = set(tpl,'var','LTODOLIST',['todo' options.extension]);
+            tpl = set(tpl,'var','LTODOLIST',['todo' opts.extension]);
             tpl = parse(tpl,'todolists','todolist',1);
         end
     end
     
     %- Link to the dependency graph if necessary
     tpl = set(tpl,'var','graphs','');
-    if options.graph
-        tpl = set(tpl,'var','LGRAPH',[dotbase options.extension]);
+    if opts.graph
+        tpl = set(tpl,'var','LGRAPH',[dotbase opts.extension]);
         tpl = parse(tpl,'graphs','graph',1);
     end
     
@@ -814,9 +638,9 @@ end
 %--------------------------------------------------------------------------
 tpl_todo = 'todo.tpl';
 
-if options.todo
+if opts.todo
     %- Create the HTML template
-    tpl = template(options.template,'remove');
+    tpl = template(opts.template,'remove');
     tpl = set(tpl,'file','TPL_TODO',tpl_todo);
     tpl = set(tpl,'block','TPL_TODO','filelist','filelists');
     tpl = set(tpl,'block','filelist','row','rows');
@@ -827,15 +651,14 @@ if options.todo
         mfilestodo = intersect(find(strcmp(mdir{i},mdirs)),todo.mfile);
         if ~isempty(mfilestodo)
             %- Open for writing each TODO list file
-            curfile = fullfile(options.htmlDir,mdir{i},...
-                               ['todo' options.extension]);
-            if options.verbose
-                fprintf('Creating HTML file %s...\n',curfile);
-            end
-            fid = openfile(curfile,'w');
+            curfile = fullfile(opts.htmlDir,mdir{i},...
+                               ['todo' opts.extension]);
+            fprintf('Creating HTML file %s...\n',curfile);
+
+            fid = fopen(curfile,'w');
             
             %- Set template fields
-            tpl = set(tpl,'var','INDEX',[options.indexFile options.extension]);
+            tpl = set(tpl,'var','INDEX',[opts.indexFile opts.extension]);
             tpl = set(tpl,'var','MASTERPATH', backtomaster(mdir{i}));
             tpl = set(tpl,'var','MDIR',       mdir{i});
             tpl = set(tpl,'var','filelists',  '');
@@ -847,7 +670,7 @@ if options.todo
                 for l=1:length(nbtodo)
                     tpl = set(tpl,'var','L_NBLINE',...
                         [names{mfilestodo(k)} ...
-                            options.extension ...
+                            opts.extension ...
                             '#l' num2str(todo.line(nbtodo(l)))]);
                     tpl = set(tpl,'var','NBLINE',num2str(todo.line(nbtodo(l))));
                     tpl = set(tpl,'var','COMMENT',todo.comment{nbtodo(l)});
@@ -873,31 +696,30 @@ tpl_graph = 'graph.tpl';
 dot_exec  = 'dot';
 %dotbase defined earlier
 
-if options.graph
+if opts.graph
     %- Create the HTML template
-    tpl = template(options.template,'remove');
+    tpl = template(opts.template,'remove');
     tpl = set(tpl,'file','TPL_GRAPH',tpl_graph);
     tpl = set(tpl,'var','DATE',[datestr(now,8) ' ' datestr(now,1) ' ' ...
                                 datestr(now,13)]);
     
     %- Create a full dependency graph for all directories if possible
-    if options.globalHypertextLinks && length(mdir) > 1
-        mdotfile = fullfile(options.htmlDir,[dotbase '.dot']);
-        if options.verbose
-            fprintf('Creating full dependency graph %s...',mdotfile);
-        end
-        mdot({hrefs, names, options, mdirs}, mdotfile); %mfiles
+    if opts.globalHypertextLinks && length(mdir) > 1
+        mdotfile = fullfile(opts.htmlDir,[dotbase '.dot']);
+        fprintf('Creating full dependency graph %s...',mdotfile);
+
+        mdot({hrefs, names, opts, mdirs}, mdotfile); %mfiles
         calldot(dot_exec, mdotfile, ...
-                fullfile(options.htmlDir,[dotbase '.map']), ...
-                fullfile(options.htmlDir,[dotbase '.png']));
-        if options.verbose, fprintf('\n'); end
-        fid = openfile(fullfile(options.htmlDir, [dotbase options.extension]),'w');
-        tpl = set(tpl,'var','INDEX',[options.indexFile options.extension]);
+                fullfile(opts.htmlDir,[dotbase '.map']), ...
+                fullfile(opts.htmlDir,[dotbase '.png']));
+        fprintf('\n');
+        fid = fopen(fullfile(opts.htmlDir, [dotbase opts.extension]),'w');
+        tpl = set(tpl,'var','INDEX',[opts.indexFile opts.extension]);
         tpl = set(tpl,'var','MASTERPATH', './');
         tpl = set(tpl,'var','MDIR',       'the whole toolbox');
         tpl = set(tpl,'var','GRAPH_IMG',  [dotbase '.png']);
         try % if <dot> failed...
-            fmap = openfile(fullfile(options.htmlDir,[dotbase '.map']),'r');
+            fmap = fopen(fullfile(opts.htmlDir,[dotbase '.map']),'r');
             tpl = set(tpl,'var','GRAPH_MAP',  fscanf(fmap,'%c'));
             fclose(fmap);
         end
@@ -908,28 +730,27 @@ if options.graph
     
     %- Create a dependency graph for each output directory
     for i=1:length(mdir)
-        mdotfile = fullfile(options.htmlDir,mdir{i},[dotbase '.dot']);
-        if options.verbose
-            fprintf('Creating dependency graph %s...',mdotfile);
-        end
+        mdotfile = fullfile(opts.htmlDir,mdir{i},[dotbase '.dot']);
+        fprintf('Creating dependency graph %s...',mdotfile);
+
         ind = find(strcmp(mdirs,mdir{i}));
         href1 = zeros(length(ind),length(hrefs));
         for j=1:length(hrefs), href1(:,j) = hrefs(ind,j); end
         href2 = zeros(length(ind));
         for j=1:length(ind), href2(j,:) = href1(j,ind); end
-        mdot({href2, {names{ind}}, options}, mdotfile); %{mfiles{ind}}
+        mdot({href2, {names{ind}}, opts}, mdotfile); %{mfiles{ind}}
         calldot(dot_exec, mdotfile, ...
-                fullfile(options.htmlDir,mdir{i},[dotbase '.map']), ...
-                fullfile(options.htmlDir,mdir{i},[dotbase '.png']));
-        if options.verbose, fprintf('\n'); end
-        fid = openfile(fullfile(options.htmlDir,mdir{i},...
-            [dotbase options.extension]),'w');
-        tpl = set(tpl,'var','INDEX',[options.indexFile options.extension]);
+                fullfile(opts.htmlDir,mdir{i},[dotbase '.map']), ...
+                fullfile(opts.htmlDir,mdir{i},[dotbase '.png']));
+        fprintf('\n');
+        fid = fopen(fullfile(opts.htmlDir,mdir{i},...
+            [dotbase opts.extension]),'w');
+        tpl = set(tpl,'var','INDEX',[opts.indexFile opts.extension]);
         tpl = set(tpl,'var','MASTERPATH', backtomaster(mdir{i}));
         tpl = set(tpl,'var','MDIR',       mdir{i});
         tpl = set(tpl,'var','GRAPH_IMG',  [dotbase '.png']);
         try % if <dot> failed, no '.map' file has been created
-            fmap = openfile(fullfile(options.htmlDir,mdir{i},[dotbase '.map']),'r');
+            fmap = fopen(fullfile(opts.htmlDir,mdir{i},[dotbase '.map']),'r');
             tpl = set(tpl,'var','GRAPH_MAP',  fscanf(fmap,'%c'));
             fclose(fmap);
         end
@@ -961,7 +782,7 @@ tpl_mfile_line     = '%04d %s\n';
 strtok_delim = sprintf(' \t\n\r(){}[]<>+-*~!|\\@&/,:;="''%%');
 
 %- Create the HTML template
-tpl = template(options.template,'remove');
+tpl = template(opts.template,'remove');
 tpl = set(tpl,'file','TPL_MFILE',tpl_mfile);
 tpl = set(tpl,'block','TPL_MFILE','pathline','pl');
 tpl = set(tpl,'block','TPL_MFILE','mexfile','mex');
@@ -980,36 +801,34 @@ for i=1:length(mdir)
     for j=1:length(mdirs)
         if strcmp(mdirs{j},mdir{i})
         
-            curfile = fullfile(options.htmlDir,mdir{i},...
-                               [names{j} options.extension]);
+            curfile = fullfile(opts.htmlDir,mdir{i},...
+                               [names{j} opts.extension]);
                                
             %- Copy M-file for download, if necessary
-            if options.download
-                if options.verbose
-                    fprintf('Copying M-file %s.m to %s...\n',names{j},...
-                        fullfile(options.htmlDir,mdir{i}));
-                end
+            if opts.download
+                fprintf('Copying M-file %s.m to %s...\n',names{j},...
+                        fullfile(opts.htmlDir,mdir{i}));
+
                 [status, errmsg] = copyfile(mfiles{j},...
-                    fullfile(options.htmlDir,mdir{i}));
+                    fullfile(opts.htmlDir,mdir{i}));
                 error(errmsg);
             end
             
             %- Open for writing the HTML file
-            if options.verbose
-                fprintf('Creating HTML file %s...\n',curfile);
-            end
-            fid = openfile(curfile,'w');
-            if strcmp(names{j},options.indexFile)
+            fprintf('Creating HTML file %s...\n',curfile);
+            
+            fid = fopen(curfile,'w');
+            if strcmp(names{j},opts.indexFile)
                 fprintf(['Warning: HTML index file %s will be ' ...
                         'overwritten by Matlab function %s.\n'], ...
-                        [options.indexFile options.extension], mfiles{j});
+                        [opts.indexFile opts.extension], mfiles{j});
             end
             
             %- Open for reading the M-file
-            fid2 = openfile(mfiles{j},'r');
+            fid2 = fopen(mfiles{j},'r');
             
             %- Set some template fields
-            tpl = set(tpl,'var','INDEX', [options.indexFile options.extension]);
+            tpl = set(tpl,'var','INDEX', [opts.indexFile opts.extension]);
             tpl = set(tpl,'var','MASTERPATH',       backtomaster(mdir{i}));
             tpl = set(tpl,'var','MDIR',             mdirs{j});
             tpl = set(tpl,'var','NAME',             names{j});
@@ -1028,7 +847,7 @@ for i=1:length(mdir)
                 if ~isempty(cpath), cpath = cpath(1:end-1); end
                 if ismember(cpath,mdir)
                     tpl = set(tpl,'var','LPATHDIR',[repmat('../',...
-                        1,length(s)-k) options.indexFile options.extension]);
+                        1,length(s)-k) opts.indexFile opts.extension]);
                 else
                     tpl = set(tpl,'var','LPATHDIR','#');
                 end
@@ -1042,7 +861,7 @@ for i=1:length(mdir)
             samename = {samename.name};
             tpl = set(tpl,'var','MEXTYPE', 'mex');
             for k=1:length(samename)
-                [dummy, dummy, ext] = fileparts(samename{k});
+                [~, ~, ext] = fileparts(samename{k});
                 switch ext
                     case '.c'
                         tpl = set(tpl,'var','MEXTYPE', 'c');
@@ -1094,7 +913,7 @@ for i=1:length(mdir)
                             if any(ii)
                                 jj = find(ii);
                                 tline = [tline sprintf(tpl_mfile_code,...
-                                    [hrefnames{jj(1)} options.extension],...
+                                    [hrefnames{jj(1)} opts.extension],...
                                     synopsis{indsamedir(jj(1))},t)];
                             else
                                 tline = [tline t];
@@ -1116,7 +935,7 @@ for i=1:length(mdir)
                 end
             end
             tpl = set(tpl,'var','DESCRIPTION',...
-                horztab(descr,options.tabs));
+                horztab(descr,opts.tabs));
             
             %- Set cross-references template fields:
             %  Function called
@@ -1125,12 +944,12 @@ for i=1:length(mdir)
             for k=1:length(ind)
                 if strcmp(mdirs{j},mdirs{ind(k)})
                     tpl = set(tpl,'var','L_NAME_CALL', ...
-                        [names{ind(k)} options.extension]);
+                        [names{ind(k)} opts.extension]);
                 else
                     tpl = set(tpl,'var','L_NAME_CALL', ...
                               fullurl(backtomaster(mdirs{j}), ...
                                          mdirs{ind(k)}, ...
-                                       [names{ind(k)} options.extension]));
+                                       [names{ind(k)} opts.extension]));
                 end
                 tpl = set(tpl,'var','SYNOP_CALL',   synopsis{ind(k)});
                 tpl = set(tpl,'var','NAME_CALL',   names{ind(k)});
@@ -1143,12 +962,12 @@ for i=1:length(mdir)
             for k=1:length(ind)
                 if strcmp(mdirs{j},mdirs{ind(k)})
                     tpl = set(tpl,'var','L_NAME_CALLED', ...
-                        [names{ind(k)} options.extension]);
+                        [names{ind(k)} opts.extension]);
                 else
                     tpl = set(tpl,'var','L_NAME_CALLED', ...
                         fullurl(backtomaster(mdirs{j}),...
                             mdirs{ind(k)}, ...
-                            [names{ind(k)} options.extension]));
+                            [names{ind(k)} opts.extension]));
                 end
                 tpl = set(tpl,'var','SYNOP_CALLED',   synopsis{ind(k)});
                 tpl = set(tpl,'var','NAME_CALLED',   names{ind(k)});
@@ -1158,7 +977,7 @@ for i=1:length(mdir)
             
             %- Set subfunction template field
             tpl = set(tpl,'var',{'subf' 'onesubf'},{'' ''});
-            if ~isempty(subroutine{j}) && options.source
+            if ~isempty(subroutine{j}) && opts.source
                 for k=1:length(subroutine{j})
                     tpl = set(tpl, 'var', 'L_SUB', ['#_sub' num2str(k)]);
                     tpl = set(tpl, 'var', 'SUB',   subroutine{j}{k});
@@ -1170,12 +989,12 @@ for i=1:length(mdir)
             
             %- Link to M-file (for download)
             tpl = set(tpl,'var','downloads','');
-            if options.download
+            if opts.download
                 tpl = parse(tpl,'downloads','download',1);
             end
             
             %- Display source code with cross-references
-            if options.source && ~strcmpi(names{j},'contents')
+            if opts.source && ~strcmpi(names{j},'contents')
                 fseek(fid2,0,-1);
                 it = 1;
                 matlabsource = '';
@@ -1224,7 +1043,7 @@ for i=1:length(mdir)
                                 if isempty(t), break, end
                                 %- Highlight Matlab keywords &
                                 %  cross-references on known functions
-                                if options.syntaxHighlighting && ...
+                                if opts.syntaxHighlighting && ...
                                         any(strcmp(matlabKeywords,t))
                                     if strcmp('end',t)
                                         rr = fliplr(deblank(fliplr(r)));
@@ -1240,7 +1059,7 @@ for i=1:length(mdir)
                                     end
                                 elseif any(strcmp(hrefnames,t))
                                     indt = indhrefnames(logical(strcmp(hrefnames,t)));
-                                    flink = [t options.extension];
+                                    flink = [t opts.extension];
                                     ii = ismember({mdirs{indt}},mdirs{j});
                                     if ~any(ii)
                                         % take the first one...
@@ -1267,7 +1086,7 @@ for i=1:length(mdir)
                 end
                 nblinetot = nblinetot + it - 1;
                 tpl = set(tpl,'var','SOURCECODE',...
-                          horztab(matlabsource,options.tabs));
+                          horztab(matlabsource,opts.tabs));
                 tpl = parse(tpl,'thesource','source');
             else
                 tpl = set(tpl,'var','thesource','');
@@ -1283,50 +1102,14 @@ end
 %--------------------------------------------------------------------------
 %- Display Statistics
 %--------------------------------------------------------------------------
-if options.verbose
+if opts.verbose
     prnbline = '';
-    if options.source
+    if opts.source
         prnbline = sprintf('(%d lines) ', nblinetot);
     end
     fprintf('Stats: %d M-files %sin %d directories documented in %d s.\n', ...
-            length(mfiles), prnbline, length(mdir), round(etime(clock,t0)));
+            length(mfiles), prnbline, length(mdir), round(toc(t0)));
 end
-
-%==========================================================================
-function mfiles = getmfiles(mdirs, mfiles, recursive,ignoredDir)
-    %- Extract M-files from a list of directories and/or M-files
-
-    if nargin < 4, ignoredDir = {}; end
-    for i=1:length(mdirs)
-        currentdir = fullfile(pwd, mdirs{i});
-        if exist(currentdir) == 2 % M-file
-            mfiles{end+1} = mdirs{i};
-        elseif exist(currentdir) == 7 % Directory
-            d = dir(fullfile(currentdir, '*.m'));
-            d = {d(~[d.isdir]).name};
-            for j=1:length(d)
-                %- don't take care of files containing ','
-                %  probably a sccs file...
-                if isempty(findstr(',',d{j}))
-                    mfiles{end+1} = fullfile(mdirs{i}, d{j});
-                end
-            end
-            if recursive
-                d = dir(currentdir);
-                d = {d([d.isdir]).name};
-                d = {d{~ismember(d,{'.' '..' ignoredDir{:}})}};
-                for j=1:length(d)
-                    mfiles = getmfiles(cellstr(fullfile(mdirs{i},d{j})), ...
-                                       mfiles, recursive);
-                end
-            end
-        else
-            fprintf('Warning: Unprocessed file %s.\n',mdirs{i});
-            if ~isempty(strmatch('/',mdirs{i})) || findstr(':',mdirs{i})
-                fprintf('         Use relative paths in ''mfiles'' option\n');
-            end 
-        end
-    end
 
 %==========================================================================
 function calldot(dotexec, mdotfile, mapfile, pngfile, opt)
@@ -1343,13 +1126,15 @@ function calldot(dotexec, mdotfile, mapfile, pngfile, opt)
     catch % use of '!' prevents errors to be catched...
         fprintf('<dot> failed.');
     end
+end
     
 %==========================================================================
 function s = backtomaster(mdir)
     %- Provide filesystem path to go back to the root folder
 
-    ldir = splitpath(mdir);
-    s = repmat('../',1,length(ldir));
+    ldir_ = splitpath(mdir);
+    s = repmat('../',1,length(ldir_));
+end
     
 %==========================================================================
 function ldir = splitpath(p)
@@ -1358,15 +1143,16 @@ function ldir = splitpath(p)
     ldir = {};
     p = deblank(p);
     while 1
-        [t,p] = strtok(p,filesep);
-        if isempty(t), break; end
-        if ~strcmp(t,'.')
-            ldir{end+1} = t;
+        [t_,p] = strtok(p,filesep);
+        if isempty(t_), break; end
+        if ~strcmp(t_,'.')
+            ldir{end+1} = t_;
         end
     end
     if isempty(ldir)
         ldir{1} = '.'; % should be removed
     end
+end
 
 %==========================================================================
 function name = extractname(synopsis)
@@ -1374,30 +1160,25 @@ function name = extractname(synopsis)
 
     if ischar(synopsis), synopsis = {synopsis}; end
     name = cell(size(synopsis));
-    for i=1:length(synopsis)
-        ind = findstr(synopsis{i},'=');
-        if isempty(ind)
-            ind = findstr(synopsis{i},'function');
-            s = synopsis{i}(ind(1)+8:end);
+    for i_=1:length(synopsis)
+        ind_ = strfind(synopsis{i_},'=');
+        if isempty(ind_)
+            ind_ = strfind(synopsis{i_},'function');
+            s_ = synopsis{i_}(ind_(1)+8:end);
         else
-            s = synopsis{i}(ind(1)+1:end);
+            s_ = synopsis{i_}(ind_(1)+1:end);
         end
-        name{i} = strtok(s,[9:13 32 40]); % white space characters and '('
+        name{i_} = strtok(s_,[9:13 32 40]); % white space characters and '('
     end
     if length(name) == 1, name = name{1}; end
+end
 
 %==========================================================================
 function f = fullurl(varargin)
     %- Build full url from parts (using '/' and not filesep)
     
     f = strrep(fullfile(varargin{:}),'\','/');
-
-%==========================================================================
-function str = escapeblank(str)
-    %- Escape white spaces using '\'
-    
-    str = deblank(fliplr(deblank(fliplr(str))));
-    %str = strrep(str,' ','\ ');
+end
 
 %==========================================================================
 function str = entity(str)
@@ -1408,6 +1189,7 @@ function str = entity(str)
     str = strrep(str,'<','&lt;');
     str = strrep(str,'>','&gt;');
     str = strrep(str,'"','&quot;');
+end
     
 %==========================================================================
 function str = horztab(str,n)
@@ -1418,3 +1200,16 @@ function str = horztab(str,n)
     if n > 0
         str = strrep(str,sprintf('\t'),blanks(n));
     end
+end
+%==========================================================================
+function fprintf(varargin)
+    %- Print message if opts.verbose, using built-in fprintf.
+    %- If the 1st argument is numeric, a file id is provided. Print
+    %- regardless of opts.verbose.
+    if isnumeric(varargin{1}) || opts.verbose
+        builtin('fprintf',varargin{:})
+    end
+end
+
+% End of m2html function
+end
